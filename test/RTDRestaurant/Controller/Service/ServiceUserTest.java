@@ -5,556 +5,727 @@
 package RTDRestaurant.Controller.Service;
 
 import RTDRestaurant.Controller.Connection.DatabaseConnection;
-import RTDRestaurant.Model.ModelKhachHang;
 import RTDRestaurant.Model.ModelLogin;
 import RTDRestaurant.Model.ModelNguoiDung;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import org.junit.Assert;
+
 /**
  *
  * @author ADMIN
  */
-public class ServiceUserTest {
+public class ServiceUserIT {
+
     private Connection con;
     private ServiceUser service;
-    
+    private boolean autoCommitBefore;
+
     @Before
     public void setUp() throws Exception {
         DatabaseConnection dbConnection = DatabaseConnection.getInstance();
         dbConnection.connectToDatabase();
         con = dbConnection.getConnection();
+
+        // Lưu lại trạng thái autocommit trước khi test
+        autoCommitBefore = con.getAutoCommit();
+
+        // Tắt auto-commit để có thể rollback
+        con.setAutoCommit(false);
+
+        // Giả sử ServiceUser sử dụng Connection hiện tại
         service = new ServiceUser();
     }
-    
+
+    @After
+    public void tearDown() throws Exception {
+        if (con != null) {
+            con.rollback(); // Rollback mọi thay đổi sau test
+            con.setAutoCommit(autoCommitBefore); // Khôi phục trạng thái ban đầu
+        }
+    }
 
     /**
      * Test of login method, of class ServiceUser.
      */
+    /**
+     * Test case TC2_1: Kiểm tra đăng nhập thành công với email và mật khẩu
+     * đúng. Dữ liệu: Email = "NVHoangViet@gmail.com", Mật khẩu = "123" Kỳ vọng:
+     * Trả về đối tượng ModelNguoiDung chứa đúng email và mật khẩu.
+     */
     @Test
-    public void testLogin_TC2_1() throws Exception {
+    public void testLogin_TC01() throws Exception {
         ModelLogin login = new ModelLogin("NVHoangViet@gmail.com", "123");
         ModelNguoiDung result = service.login(login);
-        System.out.println(result);
-        assertEquals("NVHoangViet@gmail.com", result.getEmail());
-        assertEquals("123", result.getPassword());
+        assertNotNull("Đăng nhập thất bại - Không trả về đối tượng ModelNguoiDung", result);
+        assertEquals("Email không khớp", "NVHoangViet@gmail.com", result.getEmail());
+        assertEquals("Mật khẩu không khớp", "123", result.getPassword());
     }
+
+    /**
+     * Test case TC2_2: Kiểm tra đăng nhập thất bại khi mật khẩu sai. Dữ liệu:
+     * Email đúng, mật khẩu sai Kỳ vọng: Trả về null.
+     */
     @Test
-    public void testLogin_TC2_2() throws Exception {
+    public void testLogin_TC02() throws Exception {
         ModelLogin login = new ModelLogin("NVHoangViet@gmail.com", "1234");
         ModelNguoiDung result = service.login(login);
-        assertNull(result);
+        assertNull("Đăng nhập sai mật khẩu nhưng vẫn trả về đối tượng", result);
     }
+
+    /**
+     * Test case TC2_3: Kiểm tra đăng nhập thất bại khi cả email và mật khẩu đều
+     * sai. Dữ liệu: Email sai, mật khẩu sai Kỳ vọng: Trả về null.
+     */
     @Test
-    public void testLogin_TC2_3() throws Exception {
+    public void testLogin_TC03() throws Exception {
         ModelLogin login = new ModelLogin("NVHoangViet1111@gmail.com", "1234");
         ModelNguoiDung result = service.login(login);
-        assertNull(result);
+        assertNull("Đăng nhập với email và mật khẩu sai nhưng vẫn trả về đối tượng", result);
     }
+
+    /**
+     * Test case TC2_4: Kiểm tra đăng nhập thất bại khi tài khoản chưa xác minh
+     * (Trangthai != 'Verified'). Dữ liệu: Email hợp lệ nhưng chưa được xác minh
+     * Kỳ vọng: Trả về null.
+     */
     @Test
-    public void testLogin_TC2_4() throws Exception {
+    public void testLogin_TC04() throws Exception {
         ModelLogin login = new ModelLogin("ngan@gmail.com", "123");
         ModelNguoiDung result = service.login(login);
-        assertNull(result);
+        assertNull("Tài khoản chưa xác minh nhưng vẫn đăng nhập thành công", result);
     }
-    @Test
-    public void testLogin_TC2_5() throws Exception {
-        ModelLogin login = new ModelLogin();
-        ModelNguoiDung result = service.login(login);
-        assertNull(result);
+
+    /**
+     * Test case TC2_5: Kiểm tra đăng nhập thất bại khi không truyền email và
+     * mật khẩu. Dữ liệu: Email = null, Mật khẩu = null Kỳ vọng: Trả về
+     * exception.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testLogin_TC05() throws Exception {
+        ModelLogin login = new ModelLogin(); // email = null, mật khẩu = null
+        service.login(login);
     }
 
     /**
      * Test of insertUser method, of class ServiceUser.
      */
+    /**
+     * Test case TC01: Thêm người dùng hợp lệ với đầy đủ thông tin. Kỳ vọng: Dữ
+     * liệu được thêm thành công và đúng các trường: Email, Password, Vai trò,
+     * VerifyCode, ID.
+     */
     @Test
-    public void testInsertUser_TC1_41() throws Exception {
-        //thêm user mới chuẩn
-        //input: user{0,"hieu@gmail.com","123"}
+    public void testInsertUser_TC01() throws Exception {
+        ModelNguoiDung newUser = new ModelNguoiDung();
+        newUser.setEmail("testFullCheck@gmail.com");
+        newUser.setPassword("123456");
+
+        service.insertUser(newUser);
+
+        String sql = "SELECT * FROM NguoiDung WHERE ID_ND = ?";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, newUser.getUserID());
+        ResultSet rs = ps.executeQuery();
+
+        assertTrue("Không tìm thấy người dùng mới", rs.next());
+        assertEquals("Email không khớp", newUser.getEmail(), rs.getString("Email"));
+        assertEquals("Mật khẩu không khớp", newUser.getPassword(), rs.getString("MatKhau"));
+        assertEquals("Vai trò không đúng", newUser.getRole(), rs.getString("Vaitro"));
+        assertEquals("VerifyCode không khớp", newUser.getVerifyCode(), rs.getString("VerifyCode"));
+        assertEquals("ID người dùng không khớp", newUser.getUserID(), rs.getInt("ID_ND"));
+
+        rs.close();
+        ps.close();
+    }
+
+    /**
+     * Test case TC02: Thêm người dùng với email null. Kỳ vọng: Ném SQLException
+     * do vi phạm ràng buộc NOT NULL.
+     */
+    @Test(expected = SQLException.class)
+    public void testInsertUser_TC02() throws Exception {
         ModelNguoiDung user = new ModelNguoiDung();
-        user.setUserID(0);
-        user.setEmail("hieu@gmail.com");
-        user.setPassword("123");
-        
+        user.setEmail(null);
+        user.setPassword("123456");
+
+        service.insertUser(user);
+    }
+
+    /**
+     * Test case TC03: Thêm người dùng với mật khẩu null. Kỳ vọng: Ném
+     * SQLException do vi phạm ràng buộc NOT NULL.
+     */
+    @Test(expected = SQLException.class)
+    public void testInsertUser_TC03() throws Exception {
+        ModelNguoiDung user = new ModelNguoiDung();
+        user.setEmail("nullpass@gmail.com");
+        user.setPassword(null);
+
+        service.insertUser(user);
+    }
+
+    /**
+     * Test case TC04: Thêm người dùng với email đã tồn tại. Kỳ vọng: Ném
+     * SQLException do vi phạm ràng buộc UNIQUE.
+     */
+    @Test
+    public void testInsertUser_TC04() throws Exception {
+        ModelNguoiDung user1 = new ModelNguoiDung();
+        user1.setEmail("duplicated@gmail.com");
+        user1.setPassword("pass1");
+        service.insertUser(user1);
+
+        ModelNguoiDung user2 = new ModelNguoiDung();
+        user2.setEmail("duplicated@gmail.com");
+        user2.setPassword("pass2");
+
         try {
-            con.setAutoCommit(false);
-            service.insertUser(user);
-            
-            //kiểm tra
-            String sql="SELECT * FROM NguoiDung WHERE Email=?";
-            PreparedStatement p=con.prepareStatement(sql);
-            p.setString(1, "hieu@gmail.com");
-            ResultSet r= p.executeQuery();
-            List<ModelNguoiDung> ds=new ArrayList<>();
-            while(r.next()){
-                ModelNguoiDung u = new ModelNguoiDung();
-                u.setUserID(r.getInt("ID_ND"));
-                u.setEmail(r.getString("Email"));
-                u.setPassword(r.getString("Matkhau"));
-                u.setRole(r.getString("Vaitro"));
-                ds.add(u);
-            }
-            Assert.assertNotNull(ds);
-            Assert.assertEquals(1, ds.size());
-            Assert.assertEquals(user.getEmail(), ds.get(0).getEmail());
-            Assert.assertEquals(user.getPassword(), ds.get(0).getPassword());
-            Assert.assertEquals("Khach Hang", ds.get(0).getRole());
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try{
-                con.rollback();
-                con.setAutoCommit(true);
-            } catch(Exception ex){
-                ex.printStackTrace();
-            }
+            service.insertUser(user2);
+            fail("Kỳ vọng SQLException do email trùng nhưng không xảy ra");
+        } catch (SQLException e) {
+            System.out.println("Đã bắt được lỗi email trùng: " + e.getMessage());
+            assertTrue(e.getMessage().toLowerCase().contains("unique") || e.getMessage().toLowerCase().contains("duplicate"));
         }
     }
-//    @Test
-//    public void testInsertUser_TC1_42() throws Exception {
-//        //thêm user có email tồn tại và verified
-//        //input: user{0,"hieu@gmail.com","123"}
-//        ModelNguoiDung user = new ModelNguoiDung();
-//        user.setUserID(0);
-//        user.setEmail("hieu@gmail.com");
-//        user.setPassword("123");
-//        
-//        ModelNguoiDung user1 = new ModelNguoiDung();
-//        user1.setUserID(0);
-//        user1.setEmail("hieu@gmail.com");
-//        user1.setPassword("1");
-//        
-//        try {
-//            con.setAutoCommit(false);
-//            service.insertUser(user);
-//            String sql="SELECT * FROM NguoiDung WHERE Email=?";
-//            PreparedStatement p=con.prepareStatement(sql);
-//            p.setString(1, "hieu@gmail.com");
-//            ResultSet r= p.executeQuery();
-//            List<ModelNguoiDung> ds=new ArrayList<>();
-//            while(r.next()){
-//                ModelNguoiDung u = new ModelNguoiDung();
-//                u.setUserID(r.getInt("ID_ND"));
-//                u.setEmail(r.getString("Email"));
-//                u.setPassword(r.getString("Matkhau"));
-//                u.setRole(r.getString("Vaitro"));
-//                u.setVerifyCode(r.getString(3));
-//                ds.add(u);
-//            }
-//            String code="";
-//            int userID=-1;
-//            if(ds.size()==1){
-//                userID=ds.get(0).getUserID();
-//                code=ds.get(0).getVerifyCode();
-//                boolean check=service.verifyCodeWithUser(userID, code);
-//                if(check){
-//                    service.doneVerify(userID, "Mai Hiếu");
-//                    if(service.checkDuplicateEmail(user1.getEmail())==false){
-//                        service.insertUser(user1);
-//                    }else{
-//                        Assert.assertTrue("Email đã tồn tại ", service.checkDuplicateEmail(user1.getEmail()));
-//                    }
-//                }
-//            }else{
-//                Assert.assertTrue("Email đã tồn tại ", service.checkDuplicateEmail(user1.getEmail()));
-//            }
-//            
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        } finally {
-//            try{
-//                con.rollback();
-//                con.setAutoCommit(true);
-//            } catch(Exception ex){
-//                ex.printStackTrace();
-//            }
-//        }
-//    }
-//    @Test
-//    public void testInsertUser_TC1_43() throws Exception {
-//        System.out.println("insertUser");
-//        ModelNguoiDung user = null;
-//        ServiceUser instance = new ServiceUser();
-//        instance.insertUser(user);
-//        // TODO review the generated test code and remove the default call to fail.
-//        fail("The test case is a prototype.");
-//    }
-//    @Test
-//    public void testInsertUser_TC1_44() throws Exception {
-//        System.out.println("insertUser");
-//        ModelNguoiDung user = null;
-//        ServiceUser instance = new ServiceUser();
-//        instance.insertUser(user);
-//        // TODO review the generated test code and remove the default call to fail.
-//        fail("The test case is a prototype.");
-//    }
-//    @Test
-//    public void testInsertUser_TC1_45() throws Exception {
-//        System.out.println("insertUser");
-//        ModelNguoiDung user = null;
-//        ServiceUser instance = new ServiceUser();
-//        instance.insertUser(user);
-//        // TODO review the generated test code and remove the default call to fail.
-//        fail("The test case is a prototype.");
-//    }
-//    @Test
-//    public void testInsertUser_TC1_46() throws Exception {
-//        System.out.println("insertUser");
-//        ModelNguoiDung user = null;
-//        ServiceUser instance = new ServiceUser();
-//        instance.insertUser(user);
-//        // TODO review the generated test code and remove the default call to fail.
-//        fail("The test case is a prototype.");
-//    }
-//    @Test
-//    public void testInsertUser_TC1_47() throws Exception {
-//        System.out.println("insertUser");
-//        ModelNguoiDung user = null;
-//        ServiceUser instance = new ServiceUser();
-//        instance.insertUser(user);
-//        // TODO review the generated test code and remove the default call to fail.
-//        fail("The test case is a prototype.");
-//    }
 
+    /**
+     * Test case TC05: Thêm người dùng với email sai định dạng. Kỳ vọng: Ném
+     * IllegalArgumentException do không hợp lệ định dạng email.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testInsertUser_TC05() throws Exception {
+        ModelNguoiDung user = new ModelNguoiDung();
+        user.setEmail("invalidemail"); // không chứa @
+        user.setPassword("abc123");
+
+        service.insertUser(user);
+    }
+
+    /**
+     * Test case TC06: Thêm người dùng với đối tượng null. Kỳ vọng: Ném
+     * NullPointerException.
+     */
+    @Test(expected = NullPointerException.class)
+    public void testInsertUser_TC06() throws Exception {
+        service.insertUser(null);
+    }
+
+    /**
+     * Test of testCheckDuplicateCode method, of class ServiceUser.
+     */
+    /**
+     * Test case TC01: Mã verifyCode đã tồn tại trong bảng. Kỳ vọng: Hàm trả về
+     * true.
+     */
+    @Test
+    public void testCheckDuplicateCode_TC01() throws Exception {
+        String code = "123456";
+
+        // Thêm dữ liệu test
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, VaiTro) VALUES (?, ?, ?, ?, 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, 99999); // ID giả
+        ps.setString(2, "exists@gmail.com");
+        ps.setString(3, "123");
+        ps.setString(4, code);
+        ps.executeUpdate();
+        ps.close();
+
+        // Gọi hàm kiểm tra
+        boolean result = service.checkDuplicateCode(code);
+        assertTrue("Mã đã tồn tại nhưng trả về false", result);
+    }
+
+    /**
+     * Test case TC02: Mã verifyCode chưa tồn tại. Kỳ vọng: Hàm trả về false.
+     */
+    @Test
+    public void testCheckDuplicateCode_TC02() throws Exception {
+        String code = "000000"; // Mã chắc chắn chưa tồn tại
+        boolean result = service.checkDuplicateCode(code);
+        assertFalse("Mã chưa tồn tại nhưng trả về true", result);
+    }
+
+    /**
+     * Test case TC03: Truyền mã null vào checkDuplicateCode. Kỳ vọng: Ném ra
+     * IllegalArgumentException.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testCheckDuplicateCode_TC03() throws Exception {
+        service.checkDuplicateCode(null);
+    }
+
+    /**
+     * Test case TC04: Truyền mã rỗng ("") vào checkDuplicateCode. Kỳ vọng: Ném
+     * ra IllegalArgumentException.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testCheckDuplicateCode_TC04() throws Exception {
+        service.checkDuplicateCode("");
+    }
 
     /**
      * Test of checkDuplicateEmail method, of class ServiceUser.
      */
+    /**
+     * Test case TC01: Email đã tồn tại và trạng thái đã xác minh (Verified). Kỳ
+     * vọng: Trả về true.
+     */
     @Test
-    public void testCheckDuplicateEmail_TC1_11() throws Exception {
-        //Trường hợp email rỗng, input: "", output: false
-        String email = "";
-        boolean expResult = false;
+    public void testCheckDuplicateEmail_TC01() throws Exception {
+        String email = "verified@gmail.com";
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, Trangthai, Vaitro) VALUES (99990, ?, '123', 'Verified', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setString(1, email);
+        ps.executeUpdate();
+        ps.close();
+
         boolean result = service.checkDuplicateEmail(email);
-        assertEquals(expResult, result);
+        assertTrue("Email đã xác minh phải trả về true", result);
     }
+
+    /**
+     * Test case TC02: Email đã tồn tại nhưng chưa xác minh (Trangthai !=
+     * 'Verified'). Kỳ vọng: Trả về false.
+     */
     @Test
-    public void testCheckDuplicateEmail_TC1_12() throws Exception {
-        //Trường hợp email đã tồn tại và verified, input: "nganguyetkimthi@gmail.com", output: true
-        String email = "nganguyetkimthi@gmail.com";
-        boolean expResult = true;
+    public void testCheckDuplicateEmail_TC02() throws Exception {
+        String email = "unverified@gmail.com";
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, Trangthai, Vaitro) VALUES (99991, ?, '123', 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setString(1, email);
+        ps.executeUpdate();
+        ps.close();
+
         boolean result = service.checkDuplicateEmail(email);
-        assertEquals(expResult, result);
+        assertFalse("Email chưa xác minh phải trả về false", result);
     }
+
+    /**
+     * Test case TC03: Email không tồn tại trong bảng NguoiDung. Kỳ vọng: Trả về
+     * false.
+     */
     @Test
-    public void testCheckDuplicateEmail_TC1_13() throws Exception {
-        //Trường hợp email đã tồn tại và chưa verified, input: "ngan@gmail.com", output: false
-        String email = "ngan@gmail.com";
-        boolean expResult = false;
+    public void testCheckDuplicateEmail_TC03() throws Exception {
+        String email = "notfound@gmail.com";
         boolean result = service.checkDuplicateEmail(email);
-        assertEquals(expResult, result);
+        assertFalse("Email chưa tồn tại phải trả về false", result);
     }
-    @Test
-    public void testCheckDuplicateEmail_TC1_14() throws Exception {
-        //Trường hợp email không tồn tại, input: "hoa@gmail.com", output: false
-        String email = "hoa@gmail.com";
-        boolean expResult = false;
-        boolean result = service.checkDuplicateEmail(email);
-        assertEquals(expResult, result);
+
+    /**
+     * Test case TC04: Truyền vào null. Kỳ vọng: Ném IllegalArgumentException.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testCheckDuplicateEmail_TC04() throws Exception {
+        service.checkDuplicateEmail(null);
     }
-    @Test
-    public void testCheckDuplicateEmail_TC1_15() throws Exception {
-        //Trường hợp email không hợp lệ, input: "123", output: false
-        String email = "123";
-        boolean expResult = false;
-        boolean result = service.checkDuplicateEmail(email);
-        assertEquals(expResult, result);
+
+    /**
+     * Test case TC05: Truyền vào chuỗi rỗng "". Kỳ vọng: Ném
+     * IllegalArgumentException.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testCheckDuplicateEmail_TC05() throws Exception {
+        service.checkDuplicateEmail("");
     }
+
     /**
      * Test of doneVerify method, of class ServiceUser.
      */
+    /**
+     * Test case TC01: Xác minh thành công cho người dùng chưa xác minh. Kỳ
+     * vọng: Cập nhật verifyCode = '', Trangthai = 'Verified', và thêm khách
+     * hàng mới.
+     */
     @Test
-    public void kiemTraDoneVerify_TC1_71() throws SQLException {
-        try {
-            con.setAutoCommit(false);
-            // 1. Thiết lập dữ liệu test
-            int userID = 114;
-            String name = "Nguyễn Văn Test";
+    public void testDoneVerify_TC01() throws Exception {
+        int userID = 99995;
+        String email = "verifyme@gmail.com";
+        String code = "999999";
+        String name = "Nguyễn Văn Test";
 
-            // 2. Thực thi phương thức cần kiểm tra
-            service.doneVerify(userID, name);
+        // Thêm người dùng giả
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, ?, 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, email);
+        ps.setString(3, "123");
+        ps.setString(4, code);
+        ps.executeUpdate();
+        ps.close();
 
-            // 3. Kiểm tra kết quả trong bảng NguoiDung
-            String queryND = "SELECT VerifyCode, Trangthai FROM NguoiDung WHERE ID_ND = ?";
-            PreparedStatement psND = con.prepareStatement(queryND);
-            psND.setInt(1, userID);
-            ResultSet rsND = psND.executeQuery();
+        // Gọi hàm cần test
+        service.doneVerify(userID, name);
 
-            // Kiểm tra trạng thái đã được cập nhật đúng chưa
-            assertTrue("Không tìm thấy bản ghi NguoiDung", rsND.next());
-            assertEquals("VerifyCode không được cập nhật đúng", null, rsND.getString("VerifyCode"));
-            assertEquals("Trangthai không được cập nhật đúng", "Verified", rsND.getString("Trangthai"));
-            psND.close();
+        // Kiểm tra cập nhật VerifyCode và Trangthai trong NguoiDung
+        String sqlCheck = "SELECT VerifyCode, Trangthai FROM NguoiDung WHERE ID_ND = ?";
+        PreparedStatement psCheck = con.prepareStatement(sqlCheck);
+        psCheck.setInt(1, userID);
+        ResultSet rsCheck = psCheck.executeQuery();
 
-            // 4. Kiểm tra kết quả trong bảng KhachHang
-            String queryKH = "SELECT ID_KH, TenKH, TO_CHAR(Ngaythamgia, 'dd-MM-YYYY') as NgayTG, ID_ND FROM KhachHang WHERE ID_ND = ?";
-            PreparedStatement psKH = con.prepareStatement(queryKH);
-            psKH.setInt(1, userID);
-            ResultSet rsKH = psKH.executeQuery();
+        assertTrue("Không tìm thấy người dùng với ID đã xác minh", rsCheck.next());
+        assertEquals("VerifyCode không được xóa sau khi xác minh", "", rsCheck.getString("VerifyCode"));
+        assertEquals("Trạng thái người dùng không cập nhật thành 'Verified'", "Verified", rsCheck.getString("Trangthai"));
 
-            // Kiểm tra khách hàng mới đã được thêm đúng chưa
-            assertTrue("Không tìm thấy bản ghi KhachHang", rsKH.next());
-            assertNotNull("ID_KH không được tạo", rsKH.getInt("ID_KH"));
-            assertEquals("TenKH không khớp", name, rsKH.getString("TenKH"));
+        psCheck.close();
 
-            // Kiểm tra ngày tham gia
-            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd-MM-YYYY");
-            String expectedDate = simpleDateFormat.format(new Date());
-            assertEquals("Ngày tham gia không khớp", expectedDate, rsKH.getString("NgayTG"));
+        // Kiểm tra khách hàng được thêm mới vào bảng KhachHang
+        String sqlKH = "SELECT * FROM KhachHang WHERE ID_ND = ?";
+        PreparedStatement psKH = con.prepareStatement(sqlKH);
+        psKH.setInt(1, userID);
+        ResultSet rsKH = psKH.executeQuery();
 
-            // Kiểm tra ID_ND
-            assertEquals("ID_ND không khớp", userID, rsKH.getInt("ID_ND"));
-            psKH.close();
-        } catch (Exception e) {
-        } finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+        assertTrue("Không tìm thấy bản ghi khách hàng tương ứng sau xác minh", rsKH.next());
+        assertEquals("Tên khách hàng lưu trong bảng KhachHang không đúng", name, rsKH.getString("TenKH"));
+
+        psKH.close();
     }
-    
+
+    /**
+     * Test case TC02: Xác minh lại người dùng đã Verified. Kỳ vọng: Có thể cập
+     * nhật lại, không lỗi, và thêm khách hàng nếu chưa có.
+     */
     @Test
-    public void kiemTraDoneVerifyVoiNhieuKhachHang_TC1_73() throws SQLException {
-        try {
-            // 1. Thêm một khách hàng đã tồn tại
-            con.setAutoCommit(false);
+    public void testDoneVerify_TC02() throws Exception {
+        int userID = 99996;
+        String name = "Tên đã xác minh";
 
-            // 2. Thực thi phương thức với dữ liệu test
-            int userID = 125;
-            String name = "Nguyễn Văn Test 2";
-            service.doneVerify(userID, name);
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, '', 'Verified', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "alreadyverified@gmail.com");
+        ps.setString(3, "123");
+        ps.executeUpdate();
+        ps.close();
 
-            // 3. Kiểm tra ID_KH mới phải lớn hơn ID_KH hiện tại
-            String queryNewKH = "SELECT * FROM KhachHang WHERE ID_ND = ?";
-            PreparedStatement psNewKH = con.prepareStatement(queryNewKH);
-            psNewKH.setInt(1, userID);
-            ResultSet rsNewKH = psNewKH.executeQuery();
-            int i=0;
-            while(rsNewKH.next()){
-                i++;
-            }
-            assertEquals("Hàm vẫn thêm khách hàng mới cho khách hàng đã tồn tại", 1, i);
-            assertTrue("Không tìm thấy khách hàng mới", rsNewKH.next());
-            int newKHID = rsNewKH.getInt("ID_KH");
-            psNewKH.close();
+        service.doneVerify(userID, name);
 
-        } catch (Exception e) {
-        } finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+        String sqlKH = "SELECT * FROM KhachHang WHERE ID_ND = ?";
+        PreparedStatement psKH = con.prepareStatement(sqlKH);
+        psKH.setInt(1, userID);
+        ResultSet rsKH = psKH.executeQuery();
+        assertTrue("Không tìm thấy khách hàng", rsKH.next());
+        psKH.close();
     }
-    
+
+    /**
+     * Test case TC03: Truyền userID không tồn tại. Kỳ vọng: Ném SQLException.
+     */
     @Test(expected = SQLException.class)
-    public void kiemTraDoneVerifyVoiLoi_TC1_72() throws SQLException {
-        // 1. Cố gắng gọi phương thức với ID_ND không tồn tại
-        int nonExistentUserID = 999;
-        String name = "Không Tồn Tại";
-        
-        // 2. Thay đổi autocommit để ném ngoại lệ ngay lập tức
-        con.setAutoCommit(true);
-        
-        // 3. Thực thi phương thức - phải ném SQLException vì không tìm thấy ID_ND
-        service.doneVerify(nonExistentUserID, name);
-        
-        // 4. Phải fail nếu không có ngoại lệ
-        fail("Kỳ vọng SQLException nhưng không có ngoại lệ nào được ném ra");
+    public void testDoneVerify_TC03() throws Exception {
+        int nonExistentUserID = 123456;
+        service.doneVerify(nonExistentUserID, "Tên bất kỳ");
+    }
+
+    /**
+     * Test case TC04: Truyền name = null. Kỳ vọng: Ném SQLException do lỗi ràng
+     * buộc tên khách hàng.
+     */
+    @Test(expected = SQLException.class)
+    public void testDoneVerify_TC04() throws Exception {
+        int userID = 99997;
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, '999998', 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "nullname@gmail.com");
+        ps.setString(3, "123");
+        ps.executeUpdate();
+        ps.close();
+
+        service.doneVerify(userID, null);
+    }
+
+    /**
+     * Test case TC05: Gọi doneVerify nhiều lần trên cùng userID. Kỳ vọng: Chỉ
+     * thêm đúng 1 khách hàng.
+     */
+    @Test
+    public void testDoneVerify_TC05() throws Exception {
+        int userID = 99994;
+        String name = "Lặp Khách Hàng";
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, '567890', 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "repeat@gmail.com");
+        ps.setString(3, "123");
+        ps.executeUpdate();
+        ps.close();
+
+        service.doneVerify(userID, name);
+        service.doneVerify(userID, name); // gọi lại lần 2
+
+        String sqlKH = "SELECT COUNT(*) FROM KhachHang WHERE ID_ND = ?";
+        PreparedStatement psKH = con.prepareStatement(sqlKH);
+        psKH.setInt(1, userID);
+        ResultSet rs = psKH.executeQuery();
+        rs.next();
+        int count = rs.getInt(1);
+        assertEquals("Chỉ được thêm 1 khách hàng", 1, count);
+        psKH.close();
     }
 
     /**
      * Test of verifyCodeWithUser method, of class ServiceUser.
      */
+    /**
+     * Test case TC01: Kiểm tra mã xác minh đúng. Người dùng tồn tại và nhập
+     * đúng mã xác minh. Kỳ vọng: Trả về true.
+     */
     @Test
-    public void testVerifyCodeWithUser_TC1_61() throws Exception {
-        int userID =114;
-        String code = "791220";
-        try {
-            con.setAutoCommit(false);
-            ServiceUser instance = new ServiceUser();
-            boolean expResult = true;
-            boolean result = instance.verifyCodeWithUser(userID, code);
-            assertEquals(expResult, result);
-        } finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+    public void testVerifyCodeWithUser_TC01() throws Exception {
+        int userID = 100001;
+        String code = "123456";
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, ?, 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "correctcode@gmail.com");
+        ps.setString(3, "123");
+        ps.setString(4, code);
+        ps.executeUpdate();
+        ps.close();
+
+        boolean result = service.verifyCodeWithUser(userID, code);
+        assertTrue("Mã xác minh đúng nhưng trả về false", result);
     }
+
+    /**
+     * Test case TC02: Kiểm tra mã xác minh sai. Người dùng nhập sai mã xác
+     * minh. Kỳ vọng: Trả về false.
+     */
     @Test
-    public void testVerifyCodeWithUser_TC1_62() throws Exception {
-        int userID =114;
-        String code = "79122000";
-        try {
-            con.setAutoCommit(false);
-            ServiceUser instance = new ServiceUser();
-            boolean expResult = false;
-            boolean result = instance.verifyCodeWithUser(userID, code);
-            assertEquals(expResult, result);
-        } finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+    public void testVerifyCodeWithUser_TC02() throws Exception {
+        int userID = 100002;
+        String realCode = "654321";
+        String wrongCode = "000000";
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, ?, 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "wrongcode@gmail.com");
+        ps.setString(3, "123");
+        ps.setString(4, realCode);
+        ps.executeUpdate();
+        ps.close();
+
+        boolean result = service.verifyCodeWithUser(userID, wrongCode);
+        assertFalse("Mã sai nhưng trả về true", result);
     }
-    @Test(expected = NullPointerException.class)
-    public void testVerifyCodeWithUser_TC1_63() throws Exception {
-        int userID =114;
-        String code = null;
-        try {
-            con.setAutoCommit(false);
-            ServiceUser instance = new ServiceUser();
-            boolean result = instance.verifyCodeWithUser(userID, code);
-            fail("Phương thức verifyCodeWithUser phải ném ra NullPointerException khi code là null");
-        } finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+
+    /**
+     * Test case TC03: Truyền mã xác minh null. Kỳ vọng: Ném ra
+     * IllegalArgumentException
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testVerifyCodeWithUser_TC03() throws Exception {
+        int userID = 100003;
+        String realCode = "111111";
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, ?, 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "nullcode@gmail.com");
+        ps.setString(3, "123");
+        ps.setString(4, realCode);
+        ps.executeUpdate();
+        ps.close();
+
+        service.verifyCodeWithUser(userID, null); // ném IllegalArgumentException
     }
+
+    /**
+     * Test case TC04: Truyền mã xác minh rỗng (""). Kỳ vọng: ném
+     * IllegalArgumentException
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testVerifyCodeWithUser_TC04() throws Exception {
+        int userID = 100004;
+        String realCode = "abcdef";
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, VerifyCode, Trangthai, Vaitro) "
+                + "VALUES (?, ?, ?, ?, 'Pending', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "emptycode@gmail.com");
+        ps.setString(3, "123");
+        ps.setString(4, realCode);
+        ps.executeUpdate();
+        ps.close();
+
+        service.verifyCodeWithUser(userID, ""); // ném IllegalArgumentException
+    }
+
+    /**
+     * Test case TC05: Truyền userID không tồn tại trong bảng. Kỳ vọng: Trả về
+     * false.
+     */
     @Test
-    public void testVerifyCodeWithUser_TC1_64() throws Exception {
-        int userID =114;
-        String code = "abc";
-        try {
-            con.setAutoCommit(false);
-            ServiceUser instance = new ServiceUser();
-            boolean expResult = false;
-            boolean result = instance.verifyCodeWithUser(userID, code);
-            assertEquals(expResult, result);
-        } finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+    public void testVerifyCodeWithUser_TC05() throws Exception {
+        int userID = 999999; // ID không tồn tại
+        String code = "anycode";
+
+        boolean result = service.verifyCodeWithUser(userID, code);
+        assertFalse("User không tồn tại nhưng trả về true", result);
     }
+
     /**
      * Test of changePassword method, of class ServiceUser.
      */
+    /**
+     * Test case TC01: Cập nhật mật khẩu thành công. Dữ liệu: userID hợp lệ, mật
+     * khẩu mới khác mật khẩu cũ. Kết quả mong muốn: Trường MatKhau trong DB
+     * được cập nhật thành mật khẩu mới.
+     */
     @Test
-    public void testChangePassword_TC4_1() throws Exception {
-        int userId=125;
-        String sql="SELECT * FROM NguoiDung WHERE ID_ND = ?";
-        PreparedStatement p=con.prepareStatement(sql);
-        p.setInt(1, 125);
-        ModelNguoiDung u=new ModelNguoiDung();
-        ResultSet r= p.executeQuery();
-        if(r.next()){
-            u.setPassword(r.getString("Matkhau"));
-        }
-        String newPass=u.getPassword()+"1234";
-        try {
-            con.setAutoCommit(false);
-            service.changePassword(userId, newPass);
+    public void testChangePassword_TC01() throws Exception {
+        int userID = 200001;
+        String oldPass = "oldpass";
+        String newPass = "newpass123";
 
-            //kiểm tra
-            String sql1="SELECT * FROM NguoiDung WHERE ID_ND = ?";
-            PreparedStatement p1=con.prepareStatement(sql1);
-            p1.setInt(1, 125);
-            ModelNguoiDung u1=new ModelNguoiDung();
-            ResultSet r1= p1.executeQuery();
-            if(r1.next()){
-                u1.setPassword(r1.getString("Matkhau"));
-            }
-            assertNotEquals(u.getPassword(), u1.getPassword());
-        } finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
- 
+        // Thêm người dùng mẫu
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, Trangthai, VaiTro) "
+                + "VALUES (?, ?, ?, 'Verified', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "changepass@gmail.com");
+        ps.setString(3, oldPass);
+        ps.executeUpdate();
+        ps.close();
+
+        // Gọi hàm cập nhật mật khẩu
+        service.changePassword(userID, newPass);
+
+        // Kiểm tra kết quả
+        PreparedStatement check = con.prepareStatement("SELECT MatKhau FROM NguoiDung WHERE ID_ND = ?");
+        check.setInt(1, userID);
+        ResultSet rs = check.executeQuery();
+        assertTrue(rs.next());
+        assertEquals("Mật khẩu không được cập nhật đúng", newPass, rs.getString("MatKhau"));
+        check.close();
     }
+
+    /**
+     * Test case TC02: Mật khẩu mới giống mật khẩu cũ. Dữ liệu: userID hợp lệ,
+     * mật khẩu mới = mật khẩu cũ. Kết quả mong muốn: Trường MatKhau vẫn giữ
+     * nguyên, không bị thay đổi sai.
+     */
     @Test
-    public void testChangePassword_TC4_2() throws Exception {
-        int userId=125;
-        String sql="SELECT * FROM NguoiDung WHERE ID_ND = ?";
-        PreparedStatement p=con.prepareStatement(sql);
-        p.setInt(1, 125);
-        ModelNguoiDung u=new ModelNguoiDung();
-        ResultSet r= p.executeQuery();
-        if(r.next()){
-            u.setPassword(r.getString("Matkhau"));
-        }
-        String oldPass=u.getPassword();
-        String newPass=u.getPassword();
-        boolean check=true;
-        try {
-            con.setAutoCommit(false);
-            service.changePassword(userId, newPass);
-            check=false;
-            assertTrue("Mật khẩu mới không được trùng với mật khẩu cũ", check);
-        }catch(Exception e){
-            e.printStackTrace();
-        }finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+    public void testChangePassword_TC02() throws Exception {
+        int userID = 200002;
+        String password = "samepass";
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, Trangthai, VaiTro) "
+                + "VALUES (?, ?, ?, 'Verified', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "samepass@gmail.com");
+        ps.setString(3, password);
+        ps.executeUpdate();
+        ps.close();
+
+        service.changePassword(userID, password);
+
+        PreparedStatement check = con.prepareStatement("SELECT MatKhau FROM NguoiDung WHERE ID_ND = ?");
+        check.setInt(1, userID);
+        ResultSet rs = check.executeQuery();
+        assertTrue(rs.next());
+        assertEquals("Mật khẩu thay đổi không đúng", password, rs.getString("MatKhau"));
+        check.close();
     }
-    @Test
-    public void testChangePassword_TC4_3() throws Exception {
-        int userId=125;
-        String sql="SELECT * FROM NguoiDung WHERE ID_ND = ?";
-        PreparedStatement p=con.prepareStatement(sql);
-        p.setInt(1, 125);
-        ModelNguoiDung u=new ModelNguoiDung();
-        ResultSet r= p.executeQuery();
-        if(r.next()){
-            u.setPassword(r.getString("Matkhau"));
-        }
-        String oldPass=u.getPassword();
-        String newPass="";
-        try {
-            con.setAutoCommit(false);
-            service.changePassword(userId, newPass);
-            
-            //kiểm tra
-            String sql1="SELECT * FROM NguoiDung WHERE ID_ND = ?";
-            PreparedStatement p1=con.prepareStatement(sql1);
-            p1.setInt(1, 125);
-            ModelNguoiDung u1=new ModelNguoiDung();
-            ResultSet r1= p1.executeQuery();
-            if(r1.next()){
-                u1.setPassword(r1.getString("Matkhau"));
-            }
-            assertEquals("mật khẩu mới không được rỗng",oldPass, u1.getPassword());
-        }catch(Exception e){
-            e.printStackTrace();
-        }finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+
+    /**
+     * Test case TC03: Mật khẩu mới là chuỗi rỗng. Mục tiêu: Đảm bảo hệ thống từ
+     * chối mật khẩu rỗng bằng cách ném IllegalArgumentException. Dữ liệu:
+     * userID hợp lệ, mật khẩu mới = "" Kết quả mong muốn: Ném
+     * IllegalArgumentException.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testChangePassword_TC03() throws Exception {
+        int userID = 200003;
+
+        // Tạo user hợp lệ
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, Trangthai, VaiTro) "
+                + "VALUES (?, ?, '123', 'Verified', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "emptypass@gmail.com");
+        ps.executeUpdate();
+        ps.close();
+
+        // Gọi với mật khẩu rỗng => phải ném IllegalArgumentException
+        service.changePassword(userID, "");
     }
+
+    /**
+     * Test case TC04: Mật khẩu mới là null. Dữ liệu: newPass = null Kết quả
+     * mong muốn: SQLException (do DB không chấp nhận null nếu có ràng buộc NOT
+     * NULL).
+     */
+    @Test(expected = SQLException.class)
+    public void testChangePassword_TC04() throws Exception {
+        int userID = 200004;
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, Trangthai, VaiTro) "
+                + "VALUES (?, ?, '123', 'Verified', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "nullpass@gmail.com");
+        ps.executeUpdate();
+        ps.close();
+
+        service.changePassword(userID, null); // Gây lỗi
+    }
+
+    /**
+     * Test case TC05: Trường hợp userID không tồn tại. Dữ liệu: userID không có
+     * trong bảng. Kết quả mong muốn: Không ném lỗi, nhưng không có dòng nào bị
+     * cập nhật.
+     */
     @Test
-    public void testChangePassword_TC4_4() throws SQLException {
-        int userId=125;
-        String sql="SELECT * FROM NguoiDung WHERE ID_ND = ?";
-        PreparedStatement p=con.prepareStatement(sql);
-        p.setInt(1, 125);
-        ModelNguoiDung u=new ModelNguoiDung();
-        ResultSet r= p.executeQuery();
-        if(r.next()){
-            u.setPassword(r.getString("Matkhau"));
-        }
-        String oldPass=u.getPassword();
-        String newPass="nganngan@gmail.com1234";
-        try {
-            con.setAutoCommit(false);
-            service.changePassword(userId, newPass);
-            fail("Mật khẩu không được quá dài");
-        }catch(SQLException e){
-            boolean check=true;
-            if (e.getMessage().contains("ORA-12899")){
-                check=false;
-            }
-            assertFalse("Hàm sai",check);
-        }finally {
-            con.rollback();
-            con.setAutoCommit(true);
-        }
+    public void testChangePassword_TC05() throws Exception {
+        int userID = 999999;
+        service.changePassword(userID, "newpass");
+
+        PreparedStatement check = con.prepareStatement("SELECT COUNT(*) FROM NguoiDung WHERE ID_ND = ?");
+        check.setInt(1, userID);
+        ResultSet rs = check.executeQuery();
+        rs.next();
+        assertEquals(0, rs.getInt(1)); // Không tồn tại
+        check.close();
+    }
+
+    /**
+     * Test case TC06: Mật khẩu vượt quá độ dài giới hạn (20 ký tự). Dữ liệu:
+     * newPass > 20 ký tự. Kết quả mong muốn: SQLException với lỗi ORA-12899 do
+     * vi phạm độ dài cột.
+     */
+    @Test(expected = SQLException.class)
+    public void testChangePassword_TC06() throws Exception {
+        int userID = 200006;
+
+        String sql = "INSERT INTO NguoiDung (ID_ND, Email, MatKhau, Trangthai, VaiTro) "
+                + "VALUES (?, ?, '123', 'Verified', 'Khach Hang')";
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, userID);
+        ps.setString(2, "toolong@gmail.com");
+        ps.executeUpdate();
+        ps.close();
+
+        // Mật khẩu dài hơn 20 ký tự
+        service.changePassword(userID, "123456789012345678901");
     }
 }
