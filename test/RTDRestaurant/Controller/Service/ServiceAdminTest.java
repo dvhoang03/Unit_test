@@ -578,7 +578,7 @@ public class ServiceAdminTest {
     }
 
     ////////////////////////////////////////////////////////////////
-    ///test getPreMonthRevenueHD()
+    ///test getPreMonthRevenueHD()  ///Lấy tổng doanh thu Hóa Đơn của tháng trước
     @Test //AD_29
     public void testGetPreMonthRevenueHD() throws Exception {
         try {
@@ -600,7 +600,7 @@ public class ServiceAdminTest {
     }
 
     ///////////////////////////////////////////////////////////
-    ///test getCostNK()
+    ///test getCostNK()   /Lấy tổng chi phí Nhập kho trong ngày/tháng/năm
     @Test //AD_30
     public void testGgetCostNK_HomNay() throws Exception {
 
@@ -671,7 +671,7 @@ public class ServiceAdminTest {
     }
 
     //////////////////////////////////////////////////////////////////////////
-    ///Test getPreMonthCostNK()
+    ///Test getPreMonthCostNK()   Lấy tổng chi phí Nhập Kho của tháng trước
     @Test //AD_34
     public void testGetPreMonthCostNK() throws Exception {
         try {
@@ -693,6 +693,7 @@ public class ServiceAdminTest {
 
     ///////////////////////////////////////////////////////
     ///test getRevevueCostProfi_byMonth()
+    //////Lấy toàn bộ doanh thu, chi phí, lợi nhuận của từng tháng trong năm
     @Test //AD_35
     public void testGetRevenueCostProfit_byMonth() throws Exception {
         try {
