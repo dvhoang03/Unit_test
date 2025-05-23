@@ -128,7 +128,7 @@ public class ServiceAdminTest {
         try {
             con.setAutoCommit(false);
             sa.insertNV(nv);
-            sa.getNV(111);
+            sa.getNV(110);
 
             assertNotNull(nv);
         } finally {
